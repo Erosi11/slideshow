@@ -26,19 +26,30 @@ slideshow/
 
 ```bash
 sudo apt update
+
+# Core tools
 sudo apt install -y python3-pip python3-venv \
-    libreoffice-impress \      # PPTX → PDF conversion
-    poppler-utils \            # pdf2image backend
-    chromium-browser           # display browser
+    libreoffice-impress \
+    poppler-utils \
+    chromium-browser
+
+# Pillow build dependencies (required — no armv7l wheel on PyPI)
+sudo apt install -y libjpeg-dev zlib1g-dev libpng-dev libfreetype6-dev
 ```
 
-> **RAM tip:** `libreoffice --headless` is only invoked during upload, not during playback. Chromium runs kiosk mode for the display.
+> **Why the Pillow build deps?** PyPI does not ship pre-built Pillow wheels for
+> 32-bit ARM (`armv7l`). pip compiles Pillow from source, which needs the JPEG/PNG
+> C headers above. If you skip this step you will get a
+> `RequiredDependencyException: jpeg` build failure.
+
+> **RAM tip:** `libreoffice --headless` is only invoked during upload, not during
+> playback. Chromium runs kiosk mode for the display.
 
 ### 2 — Python environment
 
 ```bash
 cd /home/pi
-git clone <this-repo> slideshow
+git clone https://github.com/Erosi11/slideshow.git slideshow
 cd slideshow
 
 python3 -m venv venv
