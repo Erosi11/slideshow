@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Display</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: #000;
+      overflow: hidden;
+      cursor: none;
+    }
+
+    /* Two stacked image layers for crossfade */
+    #stage {
+      position: relative;
+      width: 100%;
+      height: 100%;
+    }
+
+    .slide-img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      opacity: 0;
+      transition: opacity 0.6s ease-in-out;
+    }
+
+    .slide-img.active   { opacity: 1; }
+    .slide-img.preload  { opacity: 0; }
+
+    /* "No slides" overlay */
+    #no-slides {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #333;
+      font-family: system-ui, sans-serif;
+      text-align: center;
+      gap: 0.75rem;
+    }
+    #no-slides h2 { font-size: 1.4rem; font-weight: 400; }
+    #no-slides p  { font-size: 0.9rem; }
+    #no-slides.hidden { display: none; }
+  </style>
+</head>
+<body>
+
+<div id="stage">
+  <img class="slide-img" id="img-a" src="" alt="">
+  <img class="slide-img" id="img-b" src="" alt="">
+
+  <div id="no-slides">
+    <h2>No slides configured</h2>
+    <p>Open the admin panel and upload some media.</p>
+  </div>
+</div>
+
+<script>
+(function () {
+  // -------------------------------------------------------------------------
+  // Config
+  // -------------------------------------------------------------------------
+  const CONFIG_POLL_INTERVAL = 30_000; // re-fetch config every 30 s
+  const TRANSITION_MS        = 600;    // must match CSS transition duration
+
+  // -------------------------------------------------------------------------
+  // State
+  // -------------------------------------------------------------------------
+  let slides     = [];   // sorted list of {filename, delay_override}
+  let globalDelay = 10;
+  let current    = 0;    // index into slides[]
+  let timer      = null; // advance timer
+
+  const imgA     = document.getElementById('img-a');
+  const imgB     = document.getElementById('img-b');
+  const noSlides = document.getElementById('no-slides');
+
+  let front = imgA;  // currently visible layer
+  let back  = imgB;  // preloading layer
+
+  // -------------------------------------------------------------------------
+  // Fetch + apply config
+  // -------------------------------------------------------------------------
+  async function fetchConfig() {
+    try {
+      const res = await fetch('/api/config');
+      if (!res.ok) return;
+      const cfg = await res.json();
+
+      const newSlides = [...cfg.slides].sort((a, b) => a.order - b.order);
+      globalDelay = cfg.global_delay || 10;
+
+      // Detect meaningful change
+      const newNames = newSlides.map(s => s.filename).join(',');
+      const oldNames = slides.map(s => s.filename).join(',');
+      const changed  = newNames !== oldNames;
+
+      slides = newSlides;
+
+      if (changed) {
+        // Reset to first slide on config change
+        current = 0;
+        clearTimeout(timer);
+        showCurrent();
+      }
+    } catch (_) {
+      // Network error — keep running with cached slides
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Display logic
+  // -------------------------------------------------------------------------
+  function delayFor(idx) {
+    if (!slides[idx]) return globalDelay;
+    const ov = slides[idx].delay_override;
+    return (ov !== null && ov !== undefined && ov > 0) ? ov : globalDelay;
+  }
+
+  function preloadImage(src) {
+    return new Promise(resolve => {
+      const img = new Image();
+      img.onload = img.onerror = () => resolve();
+      img.src = src;
+    });
+  }
+
+  async function showCurrent() {
+    if (slides.length === 0) {
+      noSlides.classList.remove('hidden');
+      front.classList.remove('active');
+      back.classList.remove('active');
+      // Poll until slides appear
+      timer = setTimeout(fetchConfig, CONFIG_POLL_INTERVAL);
+      return;
+    }
+
+    noSlides.classList.add('hidden');
+
+    const slide = slides[current];
+    const src   = `/media/${slide.filename}`;
+
+    // Preload into the back layer (invisible)
+    back.src = src;
+    await preloadImage(src);
+
+    // Crossfade: bring back to front, fade front out
+    back.classList.add('active');
+    front.classList.remove('active');
+
+    // Swap layer references
+    [front, back] = [back, front];
+
+    // While current is showing, preload next
+    const nextIdx = (current + 1) % slides.length;
+    if (slides[nextIdx]) {
+      preloadImage(`/media/${slides[nextIdx].filename}`);
+    }
+
+    const delay = delayFor(current) * 1000;
+    timer = setTimeout(advance, delay);
+  }
+
+  function advance() {
+    if (slides.length === 0) return;
+    current = (current + 1) % slides.length;
+    showCurrent();
+  }
+
+  // -------------------------------------------------------------------------
+  // Config polling loop
+  // -------------------------------------------------------------------------
+  async function configLoop() {
+    await fetchConfig();
+    setTimeout(configLoop, CONFIG_POLL_INTERVAL);
+  }
+
+  // -------------------------------------------------------------------------
+  // Init
+  // -------------------------------------------------------------------------
+  // Prevent screen from going blank by requesting wake lock (if supported)
+  async function requestWakeLock() {
+    if ('wakeLock' in navigator) {
+      try {
+        await navigator.wakeLock.request('screen');
+      } catch (_) { /* not critical */ }
+    }
+  }
+
+  // Re-request wake lock when tab becomes visible again
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') requestWakeLock();
+  });
+
+  requestWakeLock();
+
+  // Start
+  fetchConfig().then(showCurrent);
+  setTimeout(configLoop, CONFIG_POLL_INTERVAL);
+})();
+</script>
+
+</body>
+</html>

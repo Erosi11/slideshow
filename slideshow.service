@@ -1,0 +1,25 @@
+[Unit]
+Description=Digital Signage Slideshow
+After=network.target
+
+[Service]
+# --- adjust these two paths to match your setup ---
+User=pi
+WorkingDirectory=/home/pi/slideshow
+
+# Use the venv's Python directly so no activation is needed
+ExecStart=/home/pi/slideshow/venv/bin/python app.py
+
+# Restart on crash; wait 5 s between attempts
+Restart=on-failure
+RestartSec=5
+
+# Keep journald logs clean
+StandardOutput=journal
+StandardError=journal
+
+# Limit memory to protect the 512 MB Pi Zero 2 W
+MemoryMax=400M
+
+[Install]
+WantedBy=multi-user.target
