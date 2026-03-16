@@ -3,12 +3,22 @@ Description=Digital Signage Slideshow
 After=network.target
 
 [Service]
-# --- adjust these two paths to match your setup ---
-User=pi
-WorkingDirectory=/home/pi/slideshow
+# ---------------------------------------------------------------
+# EDIT THESE THREE LINES to match your username and install path.
+# Example: if your user is "villa" and you cloned to ~/slideshow:
+#   User=villa
+#   WorkingDirectory=/home/villa/slideshow
+#   ExecStart=/home/villa/slideshow/venv/bin/python app.py
+#
+# Quick one-liner to apply (replace YOUR_USER):
+#   sudo sed -i 's|/home/pi|/home/YOUR_USER|g; s|^User=pi|User=YOUR_USER|' \
+#       /etc/systemd/system/slideshow.service
+# ---------------------------------------------------------------
+User=YOUR_USER
+WorkingDirectory=/home/YOUR_USER/slideshow
 
-# Use the venv's Python directly so no activation is needed
-ExecStart=/home/pi/slideshow/venv/bin/python app.py
+# Use the venv's Python directly — no activation needed
+ExecStart=/home/YOUR_USER/slideshow/venv/bin/python app.py
 
 # Restart on crash; wait 5 s between attempts
 Restart=on-failure
