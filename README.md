@@ -27,35 +27,49 @@ slideshow/
 ```bash
 sudo apt update
 
-# Core tools
-sudo apt install -y python3-pip python3-venv \
+# Core tools + venv support
+# python3-full is required on Raspberry Pi OS Bookworm (Debian 12)
+# so that the venv includes pip. Without it you get:
+#   "externally-managed-environment" / PEP 668 errors
+sudo apt install -y python3-full python3-pip python3-venv \
     libreoffice-impress \
     poppler-utils \
     chromium-browser
 
-# Pillow build dependencies (required — no armv7l wheel on PyPI)
+# Pillow C build dependencies (required — no armv7l wheel on PyPI)
+# Without these you get: RequiredDependencyException: jpeg
 sudo apt install -y libjpeg-dev zlib1g-dev libpng-dev libfreetype6-dev
 ```
-
-> **Why the Pillow build deps?** PyPI does not ship pre-built Pillow wheels for
-> 32-bit ARM (`armv7l`). pip compiles Pillow from source, which needs the JPEG/PNG
-> C headers above. If you skip this step you will get a
-> `RequiredDependencyException: jpeg` build failure.
 
 > **RAM tip:** `libreoffice --headless` is only invoked during upload, not during
 > playback. Chromium runs kiosk mode for the display.
 
 ### 2 — Python environment
 
+> ⚠️ **Always activate the venv before running pip.**
+> Raspberry Pi OS Bookworm (Debian 12) enforces PEP 668 and blocks pip
+> from installing packages into the system Python directly. Running pip
+> outside the venv gives an `externally-managed-environment` error.
+
 ```bash
 cd /home/pi
 git clone https://github.com/Erosi11/slideshow.git slideshow
 cd slideshow
 
+# Create the virtual environment
 python3 -m venv venv
+
+# Activate it — your prompt will show (venv) when active
 source venv/bin/activate
+
+# Now install — pip operates inside the venv, not the system Python
 pip install -r requirements.txt
 ```
+
+> If you open a new terminal session later, always re-run
+> `source venv/bin/activate` before using `pip` or running the app
+> manually. The systemd service handles activation automatically via
+> the full venv path in `ExecStart`.
 
 ### 3 — Systemd service
 
